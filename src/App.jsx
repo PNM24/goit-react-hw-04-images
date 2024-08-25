@@ -1,86 +1,90 @@
-import React, { useState } from 'react';
-import axios from 'axios';
+import React, { useState, useEffect, useRef } from 'react';
 import Searchbar from './components/Searchbar';
 import ImageGallery from './components/ImageGallery';
-import Loader from './components/Loader';
 import Button from './components/Button';
-import Modal from './components/Modal';
+import Loader from './components/Loader';
+import getImages from './components/api';
+import { Notify } from 'notiflix/build/notiflix-notify-aio';
 
 
-const PIXABAY_API_KEY = '44301427-831c86290fcfe2068098f5d0c'; 
-
-function App() {
+export const App = () => {
+  const [searchQuery, setSearchQuery] = useState(null);
   const [images, setImages] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
-  const [selectedImage, setSelectedImage] = useState(null);
-  const [hasMoreImages, setHasMoreImages] = useState(true);
+  const [totalHits, setTotalHits] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [showTotalHitsNotification, setShowTotalHitsNotification] =
+    useState(false);
 
-  const fetchImages = async (searchQuery, pageNumber) => {
-    setLoading(true);
-    try {
-      const response = await axios.get(
-        `https://pixabay.com/api/`,
-        {
-          params: {
-            q: searchQuery,
-            page: pageNumber,
-            key: PIXABAY_API_KEY,
-            image_type: 'photo',
-            orientation: 'horizontal',
-            per_page: 20,
-          },
+  const searchQueryRef = useRef(null);
+
+  useEffect(() => {
+    if (searchQuery === null) {
+      return;
+    }
+    if (!searchQuery) {
+      Notify.failure('Search query is empty. Please enter a query.');
+      return;
+    }
+    setIsLoading(true);
+    setError(null);
+
+    getImages(searchQuery, page)
+      .then(response => {
+        const { data } = response;
+
+        if (data.totalHits === 0) {
+          Notify.failure('No results, please try another query.');
+          setIsLoading(false);
+        } else {
+          setImages(prevImages =>
+            page === 1 ? [...data.hits] : [...prevImages, ...data.hits]
+          );
+          setTotalHits(data.totalHits);
+
+          if (!showTotalHitsNotification) {
+            Notify.success(`Found a total of ${data.totalHits} images.`);
+            setShowTotalHitsNotification(true);
+          }
+
+          setIsLoading(false);
         }
-      );
+      })
+      .catch(error => {
+        setError(error);
+        setIsLoading(false);
+        Notify.failure('Error');
+      });
+  }, [searchQuery, page, showTotalHitsNotification, totalHits]);
 
-      if (pageNumber === 1) {
-        setImages(response.data.hits);
-      } else {
-        setImages((prevImages) => [...prevImages, ...response.data.hits]);
-      }
-
-      if (response.data.hits.length < 12) {
-        setHasMoreImages(false);
-      } else {
-        setHasMoreImages(true);
-      }
-    } catch (error) {
-      console.error("Error fetching images:", error);
-    } finally {
-      setLoading(false);
+  const handleSubmit = searchQuery => {
+    if (searchQuery === searchQueryRef.current) {
+      Notify.warning(`You are already viewing the request ${searchQuery}`);
+    } else {
+      setSearchQuery(searchQuery);
+      searchQueryRef.current = searchQuery;
+      setImages([]);
+      setPage(1);
+      setShowTotalHitsNotification(false);
     }
   };
 
-  const handleSearchSubmit = (searchQuery) => {
-    setQuery(searchQuery);
-    setPage(1);
-    fetchImages(searchQuery, 1);
-  };
-
   const handleLoadMore = () => {
-    const nextPage = page + 1;
-    setPage(nextPage);
-    fetchImages(query, nextPage);
-  };
-
-  const handleImageClick = (image) => {
-    setSelectedImage(image);
-  };
-
-  const closeModal = () => {
-    setSelectedImage(null);
+    setPage(prevPage => prevPage + 1);
   };
 
   return (
-    <div className="app">
-      <Searchbar onSubmit={handleSearchSubmit} />
-      <ImageGallery images={images} onImageClick={handleImageClick} />
-      {loading && <Loader />}
-      {images.length > 0 && hasMoreImages && !loading && <Button onClick={handleLoadMore} />}
-      {selectedImage && <Modal image={selectedImage} onClose={closeModal} />}
+    <div>
+      <Searchbar onSubmit={handleSubmit} />
+      {error && <h2>Error, please, try again</h2>}
+      {images.length > 0 ? (
+        <ImageGallery data={images} />
+      ) : ('')}
+      {!isLoading && images.length !== 0 && (
+        <Button onBtnClick={handleLoadMore} />
+      )}
+      {isLoading && <Loader />}
     </div>
   );
-}
-
-export default App;
+};

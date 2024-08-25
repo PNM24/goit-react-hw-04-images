@@ -1,33 +1,38 @@
 import React, { useEffect } from 'react';
-import './Modal.css';
+import style from './Modal.module.css';
+import PropTypes from 'prop-types';
 
-function Modal({ image, onClose }) {
+const Modal = ({ largeImageURL, tags, closeModal }) => {
   useEffect(() => {
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        onClose();
+    const closeByEsc = e => {
+      if (e.code === 'Escape') {
+        closeModal();
       }
     };
-
-    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', closeByEsc);
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keydown', closeByEsc);
     };
-  }, [onClose]);
+  }, [closeModal]);
 
-  const handleBackdropClick = (event) => {
+  const closeByBackdrop = event => {
     if (event.target === event.currentTarget) {
-      onClose();
+      closeModal();
     }
   };
 
   return (
-    <div className="overlay" onClick={handleBackdropClick}>
-      <div className="modal">
-        <img src={image.largeImageURL} alt={image.tags} />
+    <div className={style.Overlay} onClick={closeByBackdrop}>
+      <div className={style.Modal}>
+        <img src={largeImageURL} alt={tags} />
       </div>
     </div>
   );
-}
+};
+
+Modal.propTypes = {
+  largeImageURL: PropTypes.string.isRequired,
+  tags: PropTypes.string.isRequired,
+};
 
 export default Modal;
